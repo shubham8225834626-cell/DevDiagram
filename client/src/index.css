@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Global resets ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #fdf6e3;
+  color: #111111;
+}
+
+/* ── Chat panel markdown styles ─────────────────────────────────────────────── */
+.chat-markdown p     { margin: 0 0 0.6em; line-height: 1.6; }
+.chat-markdown ul    { margin: 0 0 0.6em 1.2em; }
+.chat-markdown ol    { margin: 0 0 0.6em 1.2em; }
+.chat-markdown li    { margin-bottom: 0.2em; }
+.chat-markdown code  { background: #f3f4f6; border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.85em; font-family: 'Fira Code', monospace; }
+.chat-markdown pre   { background: #f3f4f6; border-radius: 6px; padding: 0.75em 1em; overflow-x: auto; margin: 0 0 0.6em; }
+.chat-markdown pre code { background: none; padding: 0; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3 { font-weight: 700; margin: 0.8em 0 0.3em; }
+.chat-markdown strong { font-weight: 700; }
+.chat-markdown blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75em; color: #6b7280; margin: 0 0 0.6em; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── Loading animation ──────────────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-spin { animation: spin 1s linear infinite; }
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240,140,0,0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(240,140,0,0); }
+}
+.loading-pulse { animation: pulse-border 1.5s infinite; }
