@@ -119,7 +119,24 @@ function setSessionCookie(req, res, user) {
 }
 
 function getBaseUrl(req) {
-  return process.env.CLIENT_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
+  const host = req.get('host') || '';
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  const isLocalRequest = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+
+  const envUrl = (process.env.CLIENT_URL || '').trim().replace(/\/+$/, '');
+  const envIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envUrl);
+
+  // If deployed on a public host (e.g. Render), never fall back to a leftover localhost CLIENT_URL
+  if (envUrl && (!envIsLocal || isLocalRequest)) {
+    return envUrl;
+  }
+
+  const renderUrl = (process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+  if (renderUrl && !isLocalRequest) {
+    return renderUrl;
+  }
+
+  return `${proto}://${host}`;
 }
 
 function sanitizeReturnTo(raw) {
