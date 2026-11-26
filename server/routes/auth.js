@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Router } from 'express';
+import User from '../models/User.js';
 
 const router = Router();
 
@@ -76,13 +77,58 @@ router.get('/providers', (req, res) => {
   });
 });
 
-// ── GET /api/auth/me ──────────────────────────────────────────────────────────
-router.get('/me', (req, res) => {
+// ── Helper for other routes ───────────────────────────────────────────────────
+export function getSessionUser(req) {
   const cookies = parseCookies(req);
   const session = verifyToken(cookies[COOKIE_NAME]);
-  if (!session) return res.json({ user: null });
-  const { id, name, email, avatar, provider } = session;
-  return res.json({ user: { id, name, email, avatar, provider } });
+  if (!session) return null;
+  const { id, name, username, email, avatar, provider } = session;
+  return { id, name, username: username || '', email: email || '', avatar, provider };
+}
+
+// ── GET /api/auth/me ──────────────────────────────────────────────────────────
+router.get('/me', async (req, res) => {
+  const sessionUser = getSessionUser(req);
+  if (!sessionUser) return res.json({ user: null });
+
+  try {
+    const fallbackUsername =
+      sessionUser.username ||
+      (sessionUser.email ? sessionUser.email.split('@')[0] : '') ||
+      sessionUser.name ||
+      '';
+
+    const userDoc = await User.findOneAndUpdate(
+      { authId: sessionUser.id },
+      {
+        $setOnInsert: {
+          authId: sessionUser.id,
+          provider: sessionUser.provider || 'github',
+          name: sessionUser.name || 'User',
+          username: fallbackUsername,
+          email: sessionUser.email || '',
+          avatar: sessionUser.avatar || '',
+          lastLoginAt: new Date(),
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true, new: true }
+    ).lean();
+
+    return res.json({
+      user: {
+        id: sessionUser.id,
+        name: userDoc.name,
+        username: userDoc.username,
+        email: userDoc.email,
+        avatar: userDoc.avatar,
+        provider: userDoc.provider,
+      },
+    });
+  } catch (err) {
+    console.warn('[Auth /me] DB sync warning:', err.message);
+    return res.json({ user: sessionUser });
+  }
 });
 
 // ── POST /api/auth/logout ─────────────────────────────────────────────────────
@@ -91,16 +137,40 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+async function upsertUserRecord(user) {
+  try {
+    await User.findOneAndUpdate(
+      { authId: user.id },
+      {
+        $set: {
+          provider: user.provider,
+          name: user.name,
+          username: user.username || '',
+          email: user.email || '',
+          avatar: user.avatar || '',
+          lastLoginAt: new Date(),
+        },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    console.warn('[Auth] Failed to persist user:', err.message);
+  }
+}
+
 // ── POST /api/auth/demo ───────────────────────────────────────────────────────
-router.post('/demo', (req, res) => {
+router.post('/demo', async (req, res) => {
   const provider = req.body?.provider === 'google' ? 'google' : 'github';
   const user = {
     id: `demo-${provider}`,
     name: provider === 'google' ? 'Google Demo User' : 'GitHub Demo User',
+    username: `demo_${provider}`,
     email: 'demo@devdiagram.local',
     avatar: '',
     provider,
   };
+  await upsertUserRecord(user);
   setSessionCookie(res, user);
   res.json({ user });
 });
@@ -153,20 +223,25 @@ router.get('/google/callback', async (req, res) => {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error('Token exchange failed');
+    if (!tokenData.access_token) {
+      throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
+    }
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const profile = await userRes.json();
 
-    setSessionCookie(res, {
+    const user = {
       id: `google:${profile.id}`,
       name: profile.name || profile.email,
+      username: profile.email ? profile.email.split('@')[0] : '',
       email: profile.email || '',
       avatar: profile.picture || '',
       provider: 'google',
-    });
+    };
+    await upsertUserRecord(user);
+    setSessionCookie(res, user);
 
     return res.redirect(sanitizeReturnTo(savedState.returnTo));
   } catch (err) {
@@ -223,7 +298,9 @@ router.get('/github/callback', async (req, res) => {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error('Token exchange failed');
+    if (!tokenData.access_token) {
+      throw new Error(tokenData.error_description || tokenData.error || 'Token exchange failed');
+    }
 
     const userRes = await fetch('https://api.github.com/user', {
       headers: {
@@ -234,13 +311,37 @@ router.get('/github/callback', async (req, res) => {
     });
     const profile = await userRes.json();
 
-    setSessionCookie(res, {
+    // GitHub /user may omit private email; fetch /user/emails as fallback
+    let email = profile.email || '';
+    if (!email) {
+      try {
+        const emailsRes = await fetch('https://api.github.com/user/emails', {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'DevDiagram-App',
+          },
+        });
+        if (emailsRes.ok) {
+          const emails = await emailsRes.json();
+          const primary = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.verified) || emails[0];
+          email = primary?.email || '';
+        }
+      } catch {
+        // email remains ''
+      }
+    }
+
+    const user = {
       id: `github:${profile.id}`,
       name: profile.name || profile.login,
-      email: profile.email || '',
+      username: profile.login || '',
+      email,
       avatar: profile.avatar_url || '',
       provider: 'github',
-    });
+    };
+    await upsertUserRecord(user);
+    setSessionCookie(res, user);
 
     return res.redirect(sanitizeReturnTo(savedState.returnTo));
   } catch (err) {

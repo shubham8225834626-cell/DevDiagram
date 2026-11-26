@@ -101,6 +101,7 @@ export default function App() {
           owner={route.repoInfo.owner}
           repo={route.repoInfo.repo}
           onHome={goHome}
+          onNavigate={navigate}
           onNotFound={() => goTo404(`/${route.repoInfo.owner}/${route.repoInfo.repo}`)}
           user={user}
           onOpenLogin={() => setLoginOpen(true)}

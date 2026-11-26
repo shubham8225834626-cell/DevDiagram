@@ -250,6 +250,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
   const [pan, setPan] = useState(null);
   // Excalidraw Node Drag / Displacement state
   const [draggedNode, setDraggedNode] = useState(null);
+  const [draggedStep, setDraggedStep] = useState(null);
   const [hovered, setHovered] = useState(null);
 
   // Compute Layout
@@ -291,6 +292,28 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
   // Has any node been displaced by the user?
   const hasDisplacedNodes = useMemo(() => laid.some((n) => n.isDisplaced), [laid]);
 
+  // Dynamically recompute each step's bounding box from its current node positions
+  const dynamicStairs = useMemo(() => {
+    if (layoutMode !== 'stairs' || !stairs.length) return stairs;
+    const CARD_W = 270;
+    const CARD_H = 84;
+    return stairs.map((stair) => {
+      const stepNodes = laid.filter((n) => n.step === stair.stepIndex);
+      if (!stepNodes.length) return stair;
+      const minX = Math.min(...stepNodes.map((n) => n.x));
+      const maxX = Math.max(...stepNodes.map((n) => n.x + CARD_W));
+      const minY = Math.min(...stepNodes.map((n) => n.y - CARD_H / 2));
+      const maxY = Math.max(...stepNodes.map((n) => n.y + CARD_H / 2));
+      return {
+        ...stair,
+        x: minX - 16,
+        width: Math.max(maxX - minX + 32, CARD_W + 32),
+        topY: minY - 50,
+        bottomY: maxY + 40,
+      };
+    });
+  }, [stairs, laid, layoutMode]);
+
   // ── Node Drag / Displacement Handlers (Excalidraw style) ──────────────────
   const onNodeMouseDown = useCallback((e, node) => {
     e.stopPropagation();
@@ -305,6 +328,26 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       hasMoved: false,
     });
   }, []);
+
+  // ── Step Group Drag Handler ───────────────────────────────────────────────
+  const onStepMouseDown = useCallback((e, stepIndex) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+
+    const origPositions = {};
+    laid.forEach((n) => {
+      if (n.step === stepIndex) {
+        origPositions[n.id] = { x: n.x, y: n.y };
+      }
+    });
+
+    setDraggedStep({
+      stepIndex,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origPositions,
+    });
+  }, [laid]);
 
   // ── Canvas Pan Handlers ───────────────────────────────────────────────────
   const onCanvasMouseDown = useCallback((e) => {
@@ -341,13 +384,29 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       return;
     }
 
+    // 1.5. DRAGGING AN ENTIRE STEP GROUP
+    if (draggedStep) {
+      const dx = (e.clientX - draggedStep.startClientX) * scaleX;
+      const dy = (e.clientY - draggedStep.startClientY) * scaleY;
+
+      setLaid((prev) =>
+        prev.map((n) => {
+          const orig = draggedStep.origPositions[n.id];
+          return orig
+            ? { ...n, x: orig.x + dx, y: orig.y + dy, isDisplaced: true }
+            : n;
+        })
+      );
+      return;
+    }
+
     // 2. PANNING CANVAS BACKGROUND
     if (pan) {
       const dx = (pan.startX - e.clientX) * scaleX;
       const dy = (pan.startY - e.clientY) * scaleY;
       setVb({ ...pan.origVb, x: pan.origVb.x + dx, y: pan.origVb.y + dy });
     }
-  }, [draggedNode, pan, vb.w, vb.h]);
+  }, [draggedNode, draggedStep, pan, vb.w, vb.h]);
 
   const onMouseUp = useCallback(() => {
     if (draggedNode) {
@@ -358,10 +417,13 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       }
       setDraggedNode(null);
     }
+    if (draggedStep) {
+      setDraggedStep(null);
+    }
     if (pan) {
       setPan(null);
     }
-  }, [draggedNode, pan, nodeMap, onSelectNode, selectedNode]);
+  }, [draggedNode, draggedStep, pan, nodeMap, onSelectNode, selectedNode]);
 
   // Wheel zoom
   const onWheel = useCallback((e) => {
@@ -586,8 +648,9 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
         {/* ── STAIR PLATFORMS & RISERS ─────────────────────────────────────── */}
         {layoutMode === 'stairs' && (
           <g className="stairs-scenery">
-            {stairs.map((stair, i) => {
-              const nextStair = stairs[i + 1];
+            {dynamicStairs.map((stair, i) => {
+              const nextStair = dynamicStairs[i + 1];
+              const isDraggingThisStep = draggedStep?.stepIndex === stair.stepIndex;
               return (
                 <g key={`stair-${stair.stepIndex}`}>
                   {/* Stair Column Shelf */}
@@ -599,13 +662,23 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
                     rx={14}
                     fill="#ffffff"
                     fillOpacity="0.65"
-                    stroke="#e2e8f0"
-                    strokeWidth="1.5"
+                    stroke={isDraggingThisStep ? '#f08c00' : '#e2e8f0'}
+                    strokeWidth={isDraggingThisStep ? '2' : '1.5'}
                     strokeDasharray="6 4"
                   />
 
-                  {/* Step Level Header Banner */}
-                  <g transform={`translate(${stair.x + 14}, ${stair.topY + 22})`}>
+                  {/* Step Level Header Banner (draggable group handle) */}
+                  <g
+                    transform={`translate(${stair.x + 14}, ${stair.topY + 22})`}
+                    onMouseDown={(e) => onStepMouseDown(e, stair.stepIndex)}
+                    style={{ cursor: isDraggingThisStep ? 'grabbing' : 'grab' }}
+                  >
+                    <rect
+                      x="-6" y="-16"
+                      width={stair.width - 16} height="28"
+                      rx="8"
+                      fill="transparent"
+                    />
                     <rect
                       x="0" y="-12"
                       width="52" height="20"

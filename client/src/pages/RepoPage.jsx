@@ -4,8 +4,9 @@ import DiagramView from '../components/DiagramView.jsx';
 import ChatPanel from '../components/ChatPanel.jsx';
 import NotFoundPage from './NotFoundPage.jsx';
 import AuthButton from '../components/AuthButton.jsx';
+import HistoryPanel from '../components/HistoryPanel.jsx';
 
-export default function RepoPage({ owner, repo, onHome, user, onOpenLogin, onLogout }) {
+export default function RepoPage({ owner, repo, onHome, onNavigate, user, onOpenLogin, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isNotFound, setIsNotFound] = useState(false);
@@ -137,6 +138,16 @@ export default function RepoPage({ owner, repo, onHome, user, onOpenLogin, onLog
               onSelectNode={setSelectedNode}
             />
           )}
+
+          {/* Left-most User Repo History */}
+          <HistoryPanel
+            user={user}
+            currentOwner={owner}
+            currentRepo={repo}
+            readyToRecord={Boolean(graph)}
+            onNavigate={onNavigate}
+            onOpenLogin={onOpenLogin}
+          />
         </div>
 
         {/* Right: Chat panel */}
@@ -147,6 +158,8 @@ export default function RepoPage({ owner, repo, onHome, user, onOpenLogin, onLog
             branch={branch}
             selectedNode={selectedNode}
             onClearNode={() => setSelectedNode(null)}
+            user={user}
+            onOpenLogin={onOpenLogin}
           />
         </div>
       </div>

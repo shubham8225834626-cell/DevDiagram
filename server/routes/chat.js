@@ -1,12 +1,18 @@
 import { Router } from 'express';
 import { fetchFileContent, fetchReadme } from '../services/github.js';
 import { streamCompletion } from '../services/llm.js';
+import { getSessionUser } from './auth.js';
 
 const router = Router();
 
 // ── POST /api/chat ────────────────────────────────────────────────────────────
-// Streams response via Server-Sent Events (SSE)
+// Streams response via Server-Sent Events (SSE) — authenticated users only
 router.post('/', async (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required. Please sign in to use the AI Code Assistant.' });
+  }
+
   const { owner, repo, branch, node, messages } = req.body;
 
   if (!owner || !repo) {

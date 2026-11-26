@@ -59,7 +59,7 @@ async function streamChat({ owner, repo, branch, node, messages, onDelta, onDone
 }
 
 // ── ChatPanel Component ───────────────────────────────────────────────────────
-export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNode }) {
+export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNode, user, onOpenLogin }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -211,6 +211,61 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
 
       {/* ── Message Area ────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!user ? (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: '24px 16px',
+          }}>
+            <div style={{
+              width: '100%',
+              background: '#fffef7',
+              border: '2px solid #212529',
+              borderRadius: 14,
+              boxShadow: '4px 4px 0 #212529',
+              padding: '22px 18px',
+            }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
+              <h3 style={{
+                fontFamily: "'Caveat', cursive",
+                fontSize: 24,
+                fontWeight: 700,
+                color: '#212529',
+                margin: '0 0 6px',
+              }}>
+                Sign in to use AI Chat
+              </h3>
+              <p style={{ fontSize: 12.5, color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
+                AI Code Assistant is available for authenticated users only. Sign in with Google or GitHub to ask questions about this repository.
+              </p>
+              <button
+                id="chat-signin-btn"
+                type="button"
+                onClick={onOpenLogin}
+                style={{
+                  width: '100%',
+                  padding: '9px 16px',
+                  borderRadius: 10,
+                  border: '2px solid #000',
+                  background: '#f08c00',
+                  color: '#ffffff',
+                  fontFamily: "'Caveat', cursive",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  boxShadow: '3px 3px 0 #000',
+                  cursor: 'pointer',
+                }}
+              >
+                Sign in to Chat →
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Welcome & Suggestions if empty */}
         {messages.length === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -314,9 +369,11 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
         )}
 
         <div ref={bottomRef} />
+          </>
+        )}
       </div>
 
-      {/* ── Input Box (Always Active) ────────────────────────────────────────── */}
+      {/* ── Input Box ────────────────────────────────────────────────────────── */}
       <form
         onSubmit={handleSubmit}
         style={{
@@ -328,10 +385,11 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
       >
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          background: '#f8fafc',
+          background: user ? '#f8fafc' : '#f1f5f9',
           border: '1.5px solid #cbd5e1',
           borderRadius: 12,
           padding: '4px 6px 4px 12px',
+          opacity: user ? 1 : 0.7,
           transition: 'border-color 0.15s ease',
         }}>
           <input
@@ -340,11 +398,13 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              selectedNode
-                ? `Ask about ${selectedNode.label}…`
-                : `Ask any question about ${owner}/${repo}…`
+              !user
+                ? 'Sign in to ask questions…'
+                : selectedNode
+                  ? `Ask about ${selectedNode.label}…`
+                  : `Ask any question about ${owner}/${repo}…`
             }
-            disabled={streaming}
+            disabled={!user || streaming}
             style={{
               flex: 1,
               border: 'none',
@@ -356,16 +416,16 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
           />
           <button
             type="submit"
-            disabled={streaming || !input.trim()}
+            disabled={!user || streaming || !input.trim()}
             style={{
-              background: input.trim() && !streaming ? '#1e293b' : '#e2e8f0',
-              color: input.trim() && !streaming ? '#ffffff' : '#94a3b8',
+              background: user && input.trim() && !streaming ? '#1e293b' : '#e2e8f0',
+              color: user && input.trim() && !streaming ? '#ffffff' : '#94a3b8',
               border: 'none',
               borderRadius: 8,
               padding: '6px 12px',
               fontSize: 13,
               fontWeight: 600,
-              cursor: input.trim() && !streaming ? 'pointer' : 'default',
+              cursor: user && input.trim() && !streaming ? 'pointer' : 'default',
               transition: 'all 0.15s ease',
             }}
           >
