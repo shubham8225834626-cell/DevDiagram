@@ -1,11 +1,13 @@
-import fetch from 'node-fetch';
-
 const BASE = 'https://api.github.com';
+const FETCH_TIMEOUT_MS = 12000;
 
 // Build Authorization header only when token is set
 function authHeaders() {
   const token = process.env.GITHUB_TOKEN;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    'User-Agent': 'DevDiagram-App',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 // ── Noise filters ─────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ function isIgnoredPath(filePath) {
 export async function fetchRepoMeta(owner, repo) {
   const res = await fetch(`${BASE}/repos/${owner}/${repo}`, {
     headers: { ...authHeaders(), Accept: 'application/vnd.github+json' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (res.status === 404) {
@@ -75,7 +78,10 @@ export async function fetchRepoMeta(owner, repo) {
 export async function fetchFileTree(owner, repo, branch) {
   const res = await fetch(
     `${BASE}/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
-    { headers: { ...authHeaders(), Accept: 'application/vnd.github+json' } }
+    {
+      headers: { ...authHeaders(), Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    }
   );
 
   if (!res.ok) {
@@ -98,6 +104,7 @@ export async function fetchReadme(owner, repo) {
   try {
     const res = await fetch(`${BASE}/repos/${owner}/${repo}/readme`, {
       headers: { ...authHeaders(), Accept: 'application/vnd.github.raw' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return '';
     const text = await res.text();
@@ -112,7 +119,10 @@ export async function fetchReadme(owner, repo) {
 export async function fetchFileContent(owner, repo, branch, filePath) {
   try {
     const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await fetch(url, {
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const text = await res.text();
     // Limit to ~12000 chars for chat prompt

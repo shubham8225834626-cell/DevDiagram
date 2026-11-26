@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuthButton from '../components/AuthButton.jsx';
 
 // Accepts: https://github.com/owner/repo  OR  owner/repo
 function parseGitHubUrl(input) {
@@ -17,7 +18,7 @@ function parseGitHubUrl(input) {
   return null;
 }
 
-export default function HomePage({ onNavigate }) {
+export default function HomePage({ onNavigate, user, onOpenLogin, onLogout }) {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
 
@@ -40,7 +41,12 @@ export default function HomePage({ onNavigate }) {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#fdf6e3', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
+    <div style={{ minHeight: '100vh', background: '#fdf6e3', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px', position: 'relative' }}>
+
+      {/* Top-right Auth button */}
+      <div style={{ position: 'absolute', top: 18, right: 24, zIndex: 20 }}>
+        <AuthButton user={user} onOpenLogin={onOpenLogin} onLogout={onLogout} variant="light" />
+      </div>
 
       {/* Decorative background sketch lines */}
       <svg style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity: 0.08 }} aria-hidden>

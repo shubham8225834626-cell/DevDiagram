@@ -10,28 +10,32 @@ dotenv.config({ path: join(__dirname, '../../.env') });
 import OpenAI from 'openai';
 
 // Provider-agnostic: works with OpenAI, Gemini (OpenAI-compat), Groq, OpenRouter, Ollama, etc.
+// Fail fast (25s timeout, 0 SDK retries) so our fallback loop switches models immediately.
 const client = new OpenAI({
   baseURL: process.env.LLM_BASE_URL || 'https://api.openai.com/v1',
   apiKey:  process.env.LLM_API_KEY  || 'no-key',
+  timeout: 25000,
+  maxRetries: 0,
 });
 
-const GRAPH_MODEL = process.env.GRAPH_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini';
-const CHAT_MODEL  = process.env.CHAT_MODEL  || process.env.LLM_MODEL || 'gpt-4o-mini';
+const GRAPH_MODEL = process.env.GRAPH_MODEL || process.env.LLM_MODEL || 'gemini-flash-lite-latest';
+const CHAT_MODEL  = process.env.CHAT_MODEL  || process.env.LLM_MODEL || 'gemini-flash-lite-latest';
 
-console.log(`[LLM] baseURL=${process.env.LLM_BASE_URL}, model=${GRAPH_MODEL}, key=${process.env.LLM_API_KEY?.slice(0,12)}…`);
+console.log(`[LLM] baseURL=${process.env.LLM_BASE_URL}, graphModel=${GRAPH_MODEL}, chatModel=${CHAT_MODEL}, key=${process.env.LLM_API_KEY?.slice(0,12)}…`);
 
-// Deduplicated list of models to try if the primary hits rate-limits or 503
-const CANDIDATE_MODELS = Array.from(new Set([
-  GRAPH_MODEL,
-  'gemini-3.8-flash',
-  'gemini-3.5-flash',
+const FALLBACK_MODELS = [
   'gemini-flash-lite-latest',
-]));
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
+];
+
+const GRAPH_CANDIDATE_MODELS = Array.from(new Set([GRAPH_MODEL, ...FALLBACK_MODELS]));
+const CHAT_CANDIDATE_MODELS  = Array.from(new Set([CHAT_MODEL, ...FALLBACK_MODELS]));
 
 /** One-shot completion for graph generation (returns full text) */
 export async function generateCompletion(systemPrompt, userPrompt) {
   let lastErr = null;
-  for (const model of CANDIDATE_MODELS) {
+  for (const model of GRAPH_CANDIDATE_MODELS) {
     try {
       const resp = await client.chat.completions.create({
         model,
@@ -41,13 +45,17 @@ export async function generateCompletion(systemPrompt, userPrompt) {
         temperature: 0.2,
         max_tokens: 4096,
       });
-      return resp.choices[0]?.message?.content || '';
+      const content = resp.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error(`Empty response from model ${model}`);
+      }
+      return content;
     } catch (err) {
       lastErr = err;
       console.warn(`[LLM] Model ${model} failed (${err.status || err.message}). Trying fallback…`);
-      // If 429 or 503, wait 800ms before trying the next model
+      // Brief backoff on rate-limit / overload before trying the next model
       if (err.status === 429 || err.status === 503) {
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 400));
       }
     }
   }
@@ -57,7 +65,8 @@ export async function generateCompletion(systemPrompt, userPrompt) {
 /** Streaming chat completion — yields delta chunks */
 export async function* streamCompletion(messages) {
   let lastErr = null;
-  for (const model of CANDIDATE_MODELS) {
+  for (const model of CHAT_CANDIDATE_MODELS) {
+    let yielded = false;
     try {
       const stream = await client.chat.completions.create({
         model,
@@ -69,12 +78,16 @@ export async function* streamCompletion(messages) {
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content;
-        if (delta) yield delta;
+        if (delta) {
+          yielded = true;
+          yield delta;
+        }
       }
       return;
     } catch (err) {
       lastErr = err;
       console.warn(`[LLM Chat] Model ${model} failed (${err.status || err.message}). Trying fallback…`);
+      if (yielded) throw err;
     }
   }
   throw lastErr;

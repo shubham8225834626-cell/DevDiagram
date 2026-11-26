@@ -44,14 +44,14 @@ router.post('/', async (req, res) => {
 
     console.log(`[Cache] MISS for ${repoKey} — fetching from GitHub…`);
 
-    // 2. Fetch repo metadata (default branch, description)
-    const { branch, description } = await fetchRepoMeta(owner, repo);
-
-    // 3. Fetch filtered file tree and README in parallel
-    const [{ files, truncated }, readme] = await Promise.all([
-      fetchFileTree(owner, repo, branch),
+    // 2. Fetch repo metadata and README in parallel (README does not need branch)
+    const [{ branch, description }, readme] = await Promise.all([
+      fetchRepoMeta(owner, repo),
       fetchReadme(owner, repo),
     ]);
+
+    // 3. Fetch filtered file tree
+    const { files, truncated } = await fetchFileTree(owner, repo, branch);
 
     // 4. Generate graph via LLM (with retry + path validation)
     const graph = await generateGraph(owner, repo, description, files, readme);

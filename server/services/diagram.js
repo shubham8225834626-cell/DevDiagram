@@ -114,10 +114,10 @@ export async function generateGraph(owner, repo, description, files, readme) {
 
   let lastError = null;
 
-  // Retry loop (max 3 attempts total)
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Retry loop (max 2 attempts on parse failure; LLM fallback already handles model retries)
+  for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, 1200 * attempt));
+      await new Promise((r) => setTimeout(r, 600));
     }
     try {
       const raw = await generateCompletion(SYSTEM_PROMPT, userPrompt);
@@ -144,8 +144,9 @@ export async function generateGraph(owner, repo, description, files, readme) {
     } catch (err) {
       lastError = err;
       console.warn(`[Diagram] LLM attempt ${attempt + 1} error:`, err.message);
+      break; // generateCompletion already tried all candidate models
     }
   }
 
-  throw new Error(`Failed to generate diagram after 3 attempts: ${lastError?.message}`);
+  throw new Error(`Failed to generate diagram: ${lastError?.message}`);
 }

@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import DiagramView from '../components/DiagramView.jsx';
 import ChatPanel from '../components/ChatPanel.jsx';
+import NotFoundPage from './NotFoundPage.jsx';
+import AuthButton from '../components/AuthButton.jsx';
 
-export default function RepoPage({ owner, repo, onHome }) {
+export default function RepoPage({ owner, repo, onHome, user, onOpenLogin, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isNotFound, setIsNotFound] = useState(false);
   const [graph, setGraph] = useState(null);     // { nodes, edges }
   const [branch, setBranch] = useState('main');
   const [truncated, setTruncated] = useState(false);
@@ -31,9 +34,16 @@ export default function RepoPage({ owner, repo, onHome }) {
           err.message ||
           'Failed to generate diagram.';
         setError(msg);
+        if (err.response?.status === 404 || msg.toLowerCase().includes('not found')) {
+          setIsNotFound(true);
+        }
       })
       .finally(() => setLoading(false));
   }, [owner, repo]);
+
+  if (isNotFound && !loading) {
+    return <NotFoundPage onHome={onHome} attemptedPath={`${owner}/${repo}`} />;
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#fdf6e3' }}>
@@ -70,6 +80,7 @@ export default function RepoPage({ owner, repo, onHome }) {
             </span>
           )}
         </div>
+        <AuthButton user={user} onOpenLogin={onOpenLogin} onLogout={onLogout} variant="dark" />
       </header>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}

@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import diagramRouter from './routes/diagram.js';
 import chatRouter from './routes/chat.js';
+import authRouter from './routes/auth.js';
 
 // Fix Atlas SRV resolution on Windows — Node's resolver prefers IPv6 by default
 // which causes querySrv ECONNREFUSED even when the OS DNS works fine.
@@ -32,6 +33,7 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRouter);
 app.use('/api/diagram', diagramRouter);
 app.use('/api/chat', chatRouter);
 
