@@ -119,7 +119,7 @@ function setSessionCookie(req, res, user) {
 }
 
 function getBaseUrl(req) {
-  return process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
+  return process.env.CLIENT_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
 }
 
 function sanitizeReturnTo(raw) {

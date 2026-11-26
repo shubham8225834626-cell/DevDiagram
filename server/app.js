@@ -1,3 +1,6 @@
+import fs from 'fs';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,9 +10,13 @@ import authRouter from './routes/auth.js';
 import historyRouter from './routes/history.js';
 import { createRateLimiters } from './middleware/rateLimit.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const clientDistPath = resolve(__dirname, '../client/dist');
+
 export function getAllowedOrigins() {
   const configured = [
     process.env.CLIENT_URL,
+    process.env.RENDER_EXTERNAL_URL,
     ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : []),
     'http://localhost:5173',
     'http://127.0.0.1:5173',
@@ -34,6 +41,8 @@ export function createApp(options = {}) {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           imgSrc: ["'self'", 'data:', 'https:'],
           connectSrc: ["'self'", 'https://challenges.cloudflare.com'],
@@ -82,7 +91,18 @@ export function createApp(options = {}) {
     res.json({ ok: true });
   });
 
-  // 404 catch-all
+  // API 404 catch-all
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
+  // Serve built React frontend in production / single-service deployments
+  if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(join(clientDistPath, 'index.html'));
+    });
+  }
+
+  // Fallback 404 catch-all
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
   // Global error handler (including body size & JSON parse errors)
