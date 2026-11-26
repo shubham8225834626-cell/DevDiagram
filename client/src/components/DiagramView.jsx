@@ -207,38 +207,9 @@ function buildRisingStairsLayout(nodes, edges) {
   return { positioned, stairs: stairsMeta };
 }
 
-// ── Alternative Radial Layout ────────────────────────────────────────────────
-function buildRadialLayout(nodes, edges) {
-  if (!nodes.length) return { positioned: [], stairs: [] };
-  const outCount = {};
-  nodes.forEach((n) => { outCount[n.id] = 0; });
-  edges.forEach((e) => { if (outCount[e.from] !== undefined) outCount[e.from]++; });
-  const rootId = nodes.reduce((a, b) => (outCount[a.id] >= outCount[b.id] ? a : b)).id;
-
-  const RADII = [0, 280, 520, 750];
-  const positioned = nodes.map((n, i) => {
-    if (n.id === rootId) {
-      return { ...n, x: 0, y: 0, step: 0, isProjectFile: n.valid !== false && n.type === 'file', isDisplaced: false };
-    }
-    const angle = (2 * Math.PI * (i - 1)) / (nodes.length - 1) - Math.PI / 2;
-    const r = RADII[1 + (i % 2)];
-    return {
-      ...n,
-      x: r * Math.cos(angle),
-      y: r * Math.sin(angle),
-      step: 1,
-      isProjectFile: n.valid !== false && n.type === 'file',
-      isDisplaced: false,
-    };
-  });
-
-  return { positioned, stairs: [] };
-}
-
 // ── Main DiagramView Component ────────────────────────────────────────────────
 export default function DiagramView({ graph, branch, owner, repo, selectedNode, onSelectNode }) {
   const svgRef = useRef(null);
-  const [layoutMode, setLayoutMode] = useState('stairs');
   const [onlyProjectFiles, setOnlyProjectFiles] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [laid, setLaid] = useState([]);
@@ -256,10 +227,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
   // Compute Layout
   const computeLayout = useCallback(() => {
     if (!graph?.nodes?.length) return;
-    const { positioned, stairs: stairsData } =
-      layoutMode === 'stairs'
-        ? buildRisingStairsLayout(graph.nodes, graph.edges || [])
-        : buildRadialLayout(graph.nodes, graph.edges || []);
+    const { positioned, stairs: stairsData } = buildRisingStairsLayout(graph.nodes, graph.edges || []);
 
     setLaid(positioned);
     setStairs(stairsData);
@@ -276,7 +244,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       const maxY = Math.max(...ys) + padY + 84;
       setVb({ x: minX, y: minY, w: Math.max(maxX - minX, 900), h: Math.max(maxY - minY, 600) });
     }
-  }, [graph, layoutMode]);
+  }, [graph]);
 
   useEffect(() => {
     computeLayout();
@@ -294,7 +262,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
 
   // Dynamically recompute each step's bounding box from its current node positions
   const dynamicStairs = useMemo(() => {
-    if (layoutMode !== 'stairs' || !stairs.length) return stairs;
+    if (!stairs.length) return stairs;
     const CARD_W = 270;
     const CARD_H = 84;
     return stairs.map((stair) => {
@@ -312,7 +280,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
         bottomY: maxY + 40,
       };
     });
-  }, [stairs, laid, layoutMode]);
+  }, [stairs, laid]);
 
   // ── Node Drag / Displacement Handlers (Excalidraw style) ──────────────────
   const onNodeMouseDown = useCallback((e, node) => {
@@ -575,39 +543,6 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
               </button>
             )}
           </div>
-
-          {/* View mode toggle */}
-          <div style={{
-            background: 'rgba(255,255,255,0.92)',
-            border: '1.5px solid #e2e8f0', borderRadius: 10,
-            padding: 3, display: 'flex', gap: 2,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.05)', backdropFilter: 'blur(8px)',
-          }}>
-            <button
-              onClick={() => setLayoutMode('stairs')}
-              style={{
-                border: 'none', borderRadius: 7, padding: '4px 10px',
-                fontSize: 12, fontWeight: layoutMode === 'stairs' ? 700 : 500,
-                background: layoutMode === 'stairs' ? '#1e293b' : 'transparent',
-                color: layoutMode === 'stairs' ? '#f8fafc' : '#64748b',
-                cursor: 'pointer',
-              }}
-            >
-              🪜 Rising Stairs
-            </button>
-            <button
-              onClick={() => setLayoutMode('mindmap')}
-              style={{
-                border: 'none', borderRadius: 7, padding: '4px 10px',
-                fontSize: 12, fontWeight: layoutMode === 'mindmap' ? 700 : 500,
-                background: layoutMode === 'mindmap' ? '#1e293b' : 'transparent',
-                color: layoutMode === 'mindmap' ? '#f8fafc' : '#64748b',
-                cursor: 'pointer',
-              }}
-            >
-              🌀 Radial Map
-            </button>
-          </div>
         </div>
       </div>
 
@@ -656,8 +591,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
         <rect x={vb.x - 400} y={vb.y - 400} width={vb.w + 800} height={vb.h + 800} fill="url(#arch-grid)" />
 
         {/* ── STAIR PLATFORMS & RISERS ─────────────────────────────────────── */}
-        {layoutMode === 'stairs' && (
-          <g className="stairs-scenery">
+        <g className="stairs-scenery">
             {dynamicStairs.map((stair, i) => {
               const nextStair = dynamicStairs[i + 1];
               const isDraggingThisStep = draggedStep?.stepIndex === stair.stepIndex;
@@ -756,7 +690,6 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
               );
             })}
           </g>
-        )}
 
         {/* ── EDGES (Dynamically follow displaced cards in real-time) ────────── */}
         <g className="edges-layer">
@@ -778,13 +711,6 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
             if (to.x + CARD_WIDTH < from.x) {
               x1 = from.x;
               x2 = to.x + CARD_WIDTH;
-            }
-
-            if (layoutMode === 'mindmap') {
-              x1 = from.x;
-              y1 = from.y;
-              x2 = to.x;
-              y2 = to.y;
             }
 
             const isHovered = hovered === e.from || hovered === e.to;

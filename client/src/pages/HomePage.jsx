@@ -172,11 +172,6 @@ export default function HomePage({ onNavigate, user, onOpenLogin, onLogout }) {
           </div>
         ))}
       </div>
-
-      {/* Footer */}
-      <p style={{ marginTop: 40, fontSize: 11, color: '#d1d5db' }}>
-        Set <code style={{ background: '#f3f4f6', padding: '1px 5px', borderRadius: 3 }}>GITHUB_TOKEN</code> in .env to avoid rate limits
-      </p>
     </div>
   );
 }
