@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, default: '' },
   email: { type: String, default: '' },
   avatar: { type: String, default: '' },
+  // AES-256-GCM encrypted GitHub OAuth access token — never selected or returned by default
+  githubAccessTokenEncrypted: { type: String, default: '', select: false },
   lastLoginAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 });

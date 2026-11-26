@@ -18,12 +18,22 @@ function getSuggestedQuestions(node, owner, repo) {
   ];
 }
 
+// Safe markdown URL sanitizer (blocks javascript:, data:, etc.)
+function safeMarkdownUrlTransform(url) {
+  if (typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('#')) {
+    return trimmed;
+  }
+  return '';
+}
+
 // ── SSE streaming fetch ────────────────────────────────────────────────────────
-async function streamChat({ owner, repo, branch, node, messages, onDelta, onDone, onError, signal }) {
+async function streamChat({ owner, repo, branch, nodeId, messages, onDelta, onDone, onError, signal }) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ owner, repo, branch, node, messages }),
+    body: JSON.stringify({ owner, repo, branch, nodeId: nodeId || null, messages }),
     signal,
   });
 
@@ -101,7 +111,7 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
         owner,
         repo,
         branch,
-        node: selectedNode,
+        nodeId: selectedNode?.id || null,
         messages: historyForApi,
         signal: controller.signal,
         onDelta: (chunk) => {
@@ -349,7 +359,9 @@ export default function ChatPanel({ owner, repo, branch, selectedNode, onClearNo
             >
               {msg.role === 'assistant' ? (
                 <div className="chat-markdown" style={{ fontSize: 12.5 }}>
-                  <ReactMarkdown>{msg.content || (streaming ? '▌' : '')}</ReactMarkdown>
+                  <ReactMarkdown skipHtml urlTransform={safeMarkdownUrlTransform}>
+                    {msg.content || (streaming ? '▌' : '')}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <p style={{ margin: 0 }}>{msg.content}</p>

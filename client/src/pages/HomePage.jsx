@@ -1,22 +1,6 @@
 import { useState } from 'react';
 import AuthButton from '../components/AuthButton.jsx';
-
-// Accepts: https://github.com/owner/repo  OR  owner/repo
-function parseGitHubUrl(input) {
-  const trimmed = input.trim().replace(/\/$/, '');
-
-  // Full URL pattern
-  const urlMatch = trimmed.match(
-    /^(?:https?:\/\/)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/
-  );
-  if (urlMatch) return { owner: urlMatch[1], repo: urlMatch[2] };
-
-  // Short "owner/repo" pattern
-  const shortMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)$/);
-  if (shortMatch) return { owner: shortMatch[1], repo: shortMatch[2] };
-
-  return null;
-}
+import { parseGitHubUrl } from '../utils/urlParser.js';
 
 export default function HomePage({ onNavigate, user, onOpenLogin, onLogout }) {
   const [input, setInput] = useState('');
@@ -80,7 +64,7 @@ export default function HomePage({ onNavigate, user, onOpenLogin, onLogout }) {
 
       {/* Input form */}
       <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 520 }}>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="flex flex-col sm:flex-row gap-2.5">
           <input
             id="repo-url-input"
             type="text"

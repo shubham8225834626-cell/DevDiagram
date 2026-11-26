@@ -1,34 +1,77 @@
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { Router } from 'express';
 import User from '../models/User.js';
+import { encrypt, decrypt } from '../utils/crypto.js';
 
 const router = Router();
 
-const COOKIE_NAME = 'devdiagram_session';
-const STATE_COOKIE = 'devdiagram_oauth_state';
+export const COOKIE_NAME = 'devdiagram_session';
+export const STATE_COOKIE = 'devdiagram_oauth_state';
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 
-// Derive a stable signing secret (prefer AUTH_SECRET in .env)
-function getSecret() {
+export function getJwtSecret() {
   return process.env.AUTH_SECRET || process.env.LLM_API_KEY || 'devdiagram-local-secret';
 }
 
-function signPayload(payloadObj) {
-  const data = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
-  const sig = crypto.createHmac('sha256', getSecret()).update(data).digest('base64url');
-  return `${data}.${sig}`;
+export function signSessionJwt(user) {
+  return jwt.sign(
+    {
+      sub: user.id,
+      name: user.name,
+      username: user.username || '',
+      email: user.email || '',
+      avatar: user.avatar || '',
+      provider: user.provider,
+    },
+    getJwtSecret(),
+    {
+      algorithm: 'HS256',
+      expiresIn: SESSION_MAX_AGE_SEC,
+      issuer: 'devdiagram',
+      audience: 'devdiagram-web',
+    }
+  );
 }
 
-function verifyToken(token) {
-  if (!token || !token.includes('.')) return null;
-  const [data, sig] = token.split('.');
-  const expected = crypto.createHmac('sha256', getSecret()).update(data).digest('base64url');
-  if (sig.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+export function verifySessionJwt(token) {
+  if (!token || typeof token !== 'string') return null;
   try {
-    const parsed = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    if (parsed.exp && Date.now() > parsed.exp) return null;
-    return parsed;
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      algorithms: ['HS256'],
+      issuer: 'devdiagram',
+      audience: 'devdiagram-web',
+    });
+    if (!decoded || typeof decoded !== 'object' || !decoded.sub) return null;
+    return {
+      id: decoded.sub,
+      name: decoded.name || 'User',
+      username: decoded.username || '',
+      email: decoded.email || '',
+      avatar: decoded.avatar || '',
+      provider: decoded.provider || 'github',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function signStateToken(payloadObj) {
+  return jwt.sign(payloadObj, getJwtSecret(), {
+    algorithm: 'HS256',
+    expiresIn: '10m',
+    issuer: 'devdiagram-oauth-state',
+  });
+}
+
+function verifyStateToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    return jwt.verify(token, getJwtSecret(), {
+      algorithms: ['HS256'],
+      issuer: 'devdiagram-oauth-state',
+    });
   } catch {
     return null;
   }
@@ -42,20 +85,37 @@ function parseCookies(req) {
     if (idx === -1) continue;
     const k = part.slice(0, idx).trim();
     const v = part.slice(idx + 1).trim();
-    cookies[k] = decodeURIComponent(v);
+    try {
+      cookies[k] = decodeURIComponent(v);
+    } catch {
+      cookies[k] = v;
+    }
   }
   return cookies;
 }
 
-function setSessionCookie(res, user) {
-  const token = signPayload({ ...user, exp: Date.now() + SESSION_MAX_AGE_MS });
-  res.cookie(COOKIE_NAME, token, {
+function shouldUseSecureCookie(req) {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    process.env.COOKIE_SECURE === 'true' ||
+    Boolean(req?.secure) ||
+    req?.headers?.['x-forwarded-proto'] === 'https'
+  );
+}
+
+function cookieOptions(req, maxAge) {
+  return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: SESSION_MAX_AGE_MS,
+    secure: shouldUseSecureCookie(req),
+    maxAge,
     path: '/',
-  });
+  };
+}
+
+function setSessionCookie(req, res, user) {
+  const token = signSessionJwt(user);
+  res.cookie(COOKIE_NAME, token, cookieOptions(req, SESSION_MAX_AGE_MS));
 }
 
 function getBaseUrl(req) {
@@ -80,10 +140,24 @@ router.get('/providers', (req, res) => {
 // ── Helper for other routes ───────────────────────────────────────────────────
 export function getSessionUser(req) {
   const cookies = parseCookies(req);
-  const session = verifyToken(cookies[COOKIE_NAME]);
-  if (!session) return null;
-  const { id, name, username, email, avatar, provider } = session;
-  return { id, name, username: username || '', email: email || '', avatar, provider };
+  return verifySessionJwt(cookies[COOKIE_NAME]);
+}
+
+/**
+ * Retrieve and decrypt the authenticated user's GitHub OAuth access token from DB.
+ * Never exposed in HTTP responses.
+ */
+export async function getUserGithubToken(sessionUser) {
+  if (!sessionUser?.id) return null;
+  try {
+    const userDoc = await User.findOne({ authId: sessionUser.id })
+      .select('+githubAccessTokenEncrypted')
+      .lean();
+    if (!userDoc?.githubAccessTokenEncrypted) return null;
+    return decrypt(userDoc.githubAccessTokenEncrypted);
+  } catch {
+    return null;
+  }
 }
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
@@ -98,6 +172,7 @@ router.get('/me', async (req, res) => {
       sessionUser.name ||
       '';
 
+    // Explicitly select only safe public fields (never select githubAccessTokenEncrypted)
     const userDoc = await User.findOneAndUpdate(
       { authId: sessionUser.id },
       {
@@ -113,7 +188,9 @@ router.get('/me', async (req, res) => {
         },
       },
       { upsert: true, new: true }
-    ).lean();
+    )
+      .select('authId name username email avatar provider')
+      .lean();
 
     return res.json({
       user: {
@@ -127,18 +204,33 @@ router.get('/me', async (req, res) => {
     });
   } catch (err) {
     console.warn('[Auth /me] DB sync warning:', err.message);
-    return res.json({ user: sessionUser });
+    return res.json({
+      user: {
+        id: sessionUser.id,
+        name: sessionUser.name,
+        username: sessionUser.username,
+        email: sessionUser.email,
+        avatar: sessionUser.avatar,
+        provider: sessionUser.provider,
+      },
+    });
   }
 });
 
 // ── POST /api/auth/logout ─────────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie(COOKIE_NAME, { path: '/' });
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: shouldUseSecureCookie(req),
+    path: '/',
+  });
   res.json({ ok: true });
 });
 
-async function upsertUserRecord(user) {
+async function upsertUserRecord(user, githubAccessToken = null) {
   try {
+    const encryptedToken = githubAccessToken ? encrypt(githubAccessToken) : null;
     await User.findOneAndUpdate(
       { authId: user.id },
       {
@@ -149,6 +241,7 @@ async function upsertUserRecord(user) {
           email: user.email || '',
           avatar: user.avatar || '',
           lastLoginAt: new Date(),
+          ...(encryptedToken ? { githubAccessTokenEncrypted: encryptedToken } : {}),
         },
         $setOnInsert: { createdAt: new Date() },
       },
@@ -159,8 +252,11 @@ async function upsertUserRecord(user) {
   }
 }
 
-// ── POST /api/auth/demo ───────────────────────────────────────────────────────
+// ── POST /api/auth/demo (disabled in production) ──────────────────────────────
 router.post('/demo', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const provider = req.body?.provider === 'google' ? 'google' : 'github';
   const user = {
     id: `demo-${provider}`,
@@ -171,7 +267,7 @@ router.post('/demo', async (req, res) => {
     provider,
   };
   await upsertUserRecord(user);
-  setSessionCookie(res, user);
+  setSessionCookie(req, res, user);
   res.json({ user });
 });
 
@@ -183,8 +279,11 @@ router.get('/google', (req, res) => {
   }
 
   const returnTo = sanitizeReturnTo(req.query.returnTo);
-  const state = signPayload({ nonce: crypto.randomBytes(16).toString('hex'), returnTo, exp: Date.now() + 600000 });
-  res.cookie(STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 600000, path: '/' });
+  const state = signStateToken({
+    nonce: crypto.randomBytes(16).toString('hex'),
+    returnTo,
+  });
+  res.cookie(STATE_COOKIE, state, cookieOptions(req, 600000));
 
   const redirectUri = `${getBaseUrl(req)}/api/auth/google/callback`;
   const params = new URLSearchParams({
@@ -202,10 +301,18 @@ router.get('/google', (req, res) => {
 router.get('/google/callback', async (req, res) => {
   const { code, state } = req.query;
   const cookies = parseCookies(req);
-  const savedState = verifyToken(cookies[STATE_COOKIE]);
+  const cookieState = cookies[STATE_COOKIE];
+  const savedState = verifyStateToken(cookieState);
   res.clearCookie(STATE_COOKIE, { path: '/' });
 
-  if (!code || !state || !savedState || state !== cookies[STATE_COOKIE]) {
+  if (
+    typeof code !== 'string' ||
+    typeof state !== 'string' ||
+    typeof cookieState !== 'string' ||
+    !savedState ||
+    state.length !== cookieState.length ||
+    !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(cookieState))
+  ) {
     return res.redirect('/?auth_error=invalid_state');
   }
 
@@ -241,7 +348,7 @@ router.get('/google/callback', async (req, res) => {
       provider: 'google',
     };
     await upsertUserRecord(user);
-    setSessionCookie(res, user);
+    setSessionCookie(req, res, user);
 
     return res.redirect(sanitizeReturnTo(savedState.returnTo));
   } catch (err) {
@@ -258,14 +365,17 @@ router.get('/github', (req, res) => {
   }
 
   const returnTo = sanitizeReturnTo(req.query.returnTo);
-  const state = signPayload({ nonce: crypto.randomBytes(16).toString('hex'), returnTo, exp: Date.now() + 600000 });
-  res.cookie(STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 600000, path: '/' });
+  const state = signStateToken({
+    nonce: crypto.randomBytes(16).toString('hex'),
+    returnTo,
+  });
+  res.cookie(STATE_COOKIE, state, cookieOptions(req, 600000));
 
   const redirectUri = `${getBaseUrl(req)}/api/auth/github/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'read:user user:email',
+    scope: 'read:user user:email repo',
     state,
   });
 
@@ -275,10 +385,18 @@ router.get('/github', (req, res) => {
 router.get('/github/callback', async (req, res) => {
   const { code, state } = req.query;
   const cookies = parseCookies(req);
-  const savedState = verifyToken(cookies[STATE_COOKIE]);
+  const cookieState = cookies[STATE_COOKIE];
+  const savedState = verifyStateToken(cookieState);
   res.clearCookie(STATE_COOKIE, { path: '/' });
 
-  if (!code || !state || !savedState || state !== cookies[STATE_COOKIE]) {
+  if (
+    typeof code !== 'string' ||
+    typeof state !== 'string' ||
+    typeof cookieState !== 'string' ||
+    !savedState ||
+    state.length !== cookieState.length ||
+    !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(cookieState))
+  ) {
     return res.redirect('/?auth_error=invalid_state');
   }
 
@@ -311,7 +429,6 @@ router.get('/github/callback', async (req, res) => {
     });
     const profile = await userRes.json();
 
-    // GitHub /user may omit private email; fetch /user/emails as fallback
     let email = profile.email || '';
     if (!email) {
       try {
@@ -340,8 +457,8 @@ router.get('/github/callback', async (req, res) => {
       avatar: profile.avatar_url || '',
       provider: 'github',
     };
-    await upsertUserRecord(user);
-    setSessionCookie(res, user);
+    await upsertUserRecord(user, tokenData.access_token);
+    setSessionCookie(req, res, user);
 
     return res.redirect(sanitizeReturnTo(savedState.returnTo));
   } catch (err) {

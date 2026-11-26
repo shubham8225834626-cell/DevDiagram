@@ -50,13 +50,13 @@ export default function RepoPage({ owner, repo, onHome, onNavigate, user, onOpen
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#fdf6e3' }}>
       {/* ── Top bar ───────────────────────────────────────────────────────── */}
       <header style={{ background: '#212529', borderBottom: '2px solid #343a40' }}
-        className="flex items-center justify-between px-4 py-2.5 flex-shrink-0">
-        <div className="flex items-center gap-3">
+        className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2.5 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             id="back-home-btn"
             onClick={onHome}
             style={{ color: '#adb5bd', fontFamily: "'Caveat', cursive", fontSize: 16 }}
-            className="hover:text-white transition"
+            className="hover:text-white transition flex-shrink-0"
           >
             ← Home
           </button>
@@ -66,12 +66,12 @@ export default function RepoPage({ owner, repo, onHome, onNavigate, user, onOpen
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: '#f8f9fa', fontFamily: "'Caveat', cursive", fontSize: 17, fontWeight: 700 }}
-            className="hover:underline"
+            className="hover:underline truncate"
           >
             🗺️ {owner}/{repo}
           </a>
           {branch && (
-            <span style={{ background: '#343a40', color: '#adb5bd', fontSize: 11, borderRadius: 20, padding: '2px 10px', fontFamily: "'Caveat', cursive" }}>
+            <span className="hidden sm:inline-block" style={{ background: '#343a40', color: '#adb5bd', fontSize: 11, borderRadius: 20, padding: '2px 10px', fontFamily: "'Caveat', cursive" }}>
               {branch}
             </span>
           )}
@@ -85,9 +85,9 @@ export default function RepoPage({ owner, repo, onHome, onNavigate, user, onOpen
       </header>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Diagram canvas */}
-        <div className="flex-1 relative overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Left / Top: Diagram canvas */}
+        <div className="flex-1 min-h-0 relative overflow-hidden">
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
               style={{ background: '#fdf6e3' }}>
@@ -150,8 +150,10 @@ export default function RepoPage({ owner, repo, onHome, onNavigate, user, onOpen
           />
         </div>
 
-        {/* Right: Chat panel */}
-        <div style={{ width: 360, borderLeft: '2px solid #e9dfc8', flexShrink: 0, background: '#fff' }}>
+        {/* Right / Bottom: Chat panel */}
+        <div
+          className="w-full md:w-[360px] h-[44vh] md:h-auto border-t-2 md:border-t-0 md:border-l-2 border-[#e9dfc8] flex-shrink-0 bg-white overflow-hidden"
+        >
           <ChatPanel
             owner={owner}
             repo={repo}

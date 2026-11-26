@@ -466,25 +466,32 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#fdfbf7', overflow: 'hidden' }}>
       {/* ── Top Architecture Bar ────────────────────────────────────────────── */}
-      <div style={{
-        position: 'absolute', top: 12, left: 16, right: 16, zIndex: 10,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        pointerEvents: 'none',
-      }}>
+      <div
+        className="flex-wrap gap-2"
+        style={{
+          position: 'absolute', top: 12, left: 16, right: 16, zIndex: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          pointerEvents: 'none',
+        }}
+      >
         {/* Left: Summary pill & Project file filter */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: 'rgba(255,255,255,0.92)',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: 12, padding: '5px 12px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          backdropFilter: 'blur(8px)',
-          pointerEvents: 'auto',
-        }}>
+        <div
+          className="flex-wrap"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(255,255,255,0.92)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: 12, padding: '5px 12px',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+            backdropFilter: 'blur(8px)',
+            pointerEvents: 'auto',
+            maxWidth: '100%',
+          }}
+        >
           <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
             🪜 Rising Stairs Architecture
           </span>
-          <span style={{ color: '#cbd5e1' }}>|</span>
+          <span className="hidden sm:inline" style={{ color: '#cbd5e1' }}>|</span>
 
           {/* In-Project Files Filter */}
           <button
@@ -511,10 +518,13 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
           </button>
 
           {/* Excalidraw Drag Displace Info Badge */}
-          <span style={{
-            fontSize: 11.5, color: '#64748b', background: '#f1f5f9',
-            borderRadius: 6, padding: '2px 7px',
-          }}>
+          <span
+            className="hidden md:inline-block"
+            style={{
+              fontSize: 11.5, color: '#64748b', background: '#f1f5f9',
+              borderRadius: 6, padding: '2px 7px',
+            }}
+          >
             ✋ Drag any card to displace
           </span>
 
@@ -1062,16 +1072,19 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       </svg>
 
       {/* ── Bottom Floating Legend & Info ────────────────────────────────────── */}
-      <div style={{
-        position: 'absolute', bottom: 16, left: 16,
-        background: 'rgba(255,255,255,0.94)',
-        border: '1.5px solid #e2e8f0', borderRadius: 12,
-        padding: '8px 14px',
-        display: 'flex', alignItems: 'center', gap: 16,
-        fontSize: 12, color: '#475569',
-        boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-        backdropFilter: 'blur(8px)',
-      }}>
+      <div
+        className="flex-wrap max-w-[calc(100vw-80px)] md:max-w-none"
+        style={{
+          position: 'absolute', bottom: 16, left: 16,
+          background: 'rgba(255,255,255,0.94)',
+          border: '1.5px solid #e2e8f0', borderRadius: 12,
+          padding: '8px 14px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          fontSize: 12, color: '#475569',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
           <span style={{ fontWeight: 600, color: '#047857' }}>In-Project File</span>
@@ -1080,12 +1093,12 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
           <span style={{ fontWeight: 600, color: '#1d4ed8' }}>Directory</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 6 }}>
           <span style={{ width: 16, height: 2, background: '#f59e0b', display: 'inline-block' }} />
           <span style={{ fontWeight: 500, color: '#64748b' }}>Dependency Flow ➔</span>
         </div>
-        <span style={{ color: '#cbd5e1' }}>|</span>
-        <span style={{ color: '#94a3b8', fontSize: 11 }}>
+        <span className="hidden lg:inline" style={{ color: '#cbd5e1' }}>|</span>
+        <span className="hidden lg:inline" style={{ color: '#94a3b8', fontSize: 11 }}>
           ✋ Click & Drag any card to displace · Click to inspect · Scroll to zoom
         </span>
       </div>
@@ -1147,7 +1160,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
       {/* ── Node Detail Drawer (When a node is selected) ──────────────────────── */}
       {selectedNode && (
         <div style={{
-          position: 'absolute', top: 68, right: 16, width: 320,
+          position: 'absolute', top: 68, right: 16, width: 320, maxWidth: 'calc(100vw - 32px)',
           background: 'rgba(255,255,255,0.98)',
           border: '1.5px solid #cbd5e1',
           borderRadius: 14,
@@ -1227,10 +1240,10 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
             <span>Positioned at <strong>Step {STEP_META[selectedNode.step]?.num || '01'}</strong> ({STEP_META[selectedNode.step]?.title || 'Architecture'})</span>
           </div>
 
-          {/* GitHub Link */}
+          {/* GitHub Link (blob for files, tree for folders) */}
           {selectedNode.path && owner && repo && (
             <a
-              href={`https://github.com/${owner}/${repo}/blob/${branch || 'main'}/${selectedNode.path}`}
+              href={`https://github.com/${owner}/${repo}/${selectedNode.type === 'folder' ? 'tree' : 'blob'}/${branch || 'main'}/${selectedNode.path}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -1240,7 +1253,7 @@ export default function DiagramView({ graph, branch, owner, repo, selectedNode, 
                 padding: '8px 12px', fontSize: 12, fontWeight: 600,
               }}
             >
-              Open File on GitHub ↗
+              {selectedNode.type === 'folder' ? 'Open Folder on GitHub ↗' : 'Open File on GitHub ↗'}
             </a>
           )}
         </div>

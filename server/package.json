@@ -4,18 +4,29 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:api": "vitest run tests/api"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.3.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.5.2",
     "node-fetch": "^3.3.2",
-    "openai": "^4.52.7"
+    "openai": "^4.52.7",
+    "p-limit": "^7.3.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "autocannon": "^9.0.0",
+    "mongodb-memory-server": "^11.4.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.3.2",
+    "vitest": "^5.1.2"
   }
 }

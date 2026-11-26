@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import UserHistory from '../models/UserHistory.js';
 import Diagram from '../models/Diagram.js';
 import { getSessionUser } from './auth.js';
+import { historyRequestSchema } from '../utils/validation.js';
 
 const router = Router();
 
@@ -67,11 +68,14 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    const { owner, repo } = req.body;
-    if (!owner || !repo) {
-      return res.status(400).json({ error: 'owner and repo are required.' });
+    const parsed = historyRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues.map((i) => i.message).join('; '),
+      });
     }
 
+    const { owner, repo } = parsed.data;
     const repoKey = `${owner}/${repo}`;
     const [userDoc, diagramDoc] = await Promise.all([
       ensureUserDoc(sessionUser),
